@@ -1,0 +1,16 @@
+function convert_matlab_function(input_file, output_file, file_count, total_files)
+    struct_data = load(input_file);
+    field_names = fieldnames(struct_data);
+    for i = 1:numel(field_names)
+        eval([field_names{i}, ' = struct_data.', field_names{i}, ';']);
+    end
+    save(output_file, field_names{:});
+
+
+    if mod(file_count, 100) == 0 || file_count == total_files
+            percent_complete = (file_count / total_files) * 100;
+            disp(['Converted ' num2str(file_count) ' files (' num2str(percent_complete, '%.2f') '% complete)']);
+        end
+end
+    
+  
