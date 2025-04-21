@@ -11,6 +11,7 @@ structure = list(db.main.find({"FileLocation": {"$ne": None}, "FilePath": {"$ne"
 
 
 intialize_files = []
+pre_data_vector = []
 data_vector = []
 label_vector = []
 backward_vector = []
@@ -36,6 +37,7 @@ for idx, seizure in enumerate(structure, 1):
         seizure_start = seizure['SeizureStartTime'] 
         label_path = seizure['FilePath']
 
+        #defining the true label occurs in the data based off seizure start time
         norm_start = seizure_start - data_collection_start
         preictal_start = norm_start - 2
         split_start = round(preictal_start * 1000)
@@ -43,12 +45,17 @@ for idx, seizure in enumerate(structure, 1):
         if preictal_window.shape != (5, 2000):
             print(f'Skipping due to bad preictal window shape {preictal_window.shape}')
         predicted_idx = int(preictal_start * 1000 // 2000)
+        
+        #checking the true index matches between data and label
         label_nump = np.load(label_path)
+        print(f'CURRENT:{label_nump.shape} ')
         real_window = np.where(label_nump == 1)[0]
-        print(f'selected DATA shape: {selected_data.shape}')
+        print(f'Data window index:{predicted_idx}, Label window index: {real_window}')
+
         if selected_data.shape[0] >= 5 and predicted_idx in real_window:
             selected_data = selected_data[:5, :]
-        
+
+            #iterates forward and backward from the true label to define 2000 timepoint segments
             backward_idx = split_start - 2000
             while backward_idx >= 0:
                 segment = selected_data[:, backward_idx:backward_idx + 2000]
@@ -61,15 +68,22 @@ for idx, seizure in enumerate(structure, 1):
                 if segment.shape == (5, 2000):
                     forward_vector.append(segment)
                 forward_idx += 2000
+            #assign forward and reverse segments 
             for i in reversed(range(len(backward_vector))):
-                data_vector.append(backward_vector[i])
-            data_vector.append(preictal_window)
+                pre_data_vector.append(backward_vector[i])
+            pre_data_vector.append(preictal_window)
             for i in forward_vector:
-                data_vector.append(i)
-            label_vector.append(label_nump)
+                pre_data_vector.append(i)
+            data_vector.extend(pre_data_vector)
+            print(f"Data length: {len(pre_data_vector)}")
+            pre_data_vector.clear()
             backward_vector.clear()
             forward_vector.clear()
             print(f'{data_vector[-1].shape}') 
+            real_nump = label_nump[:-1]
+            label_vector.extend(real_nump)
+
+            print(f"Label length: {len(real_nump)}")
         else:
             print(f'Error: File {data_file} has fewer than minimum channels necessary or doesnt match label')
             continue
@@ -78,7 +92,6 @@ for idx, seizure in enumerate(structure, 1):
     print(f'File {len(intialize_files)}')   
 else:
     pass
-print(f"Shape of data_vector: ({len(data_vector)}, {data_vector[0].shape[0]}, {data_vector[0].shape[1]})")
 
 # Sanity check for all data_vector elements
 bad_shapes = []
@@ -88,6 +101,8 @@ for i, item in enumerate(data_vector):
         bad_shapes.append((i, item.shape))
 
 print(f"Total mismatched entries: {len(bad_shapes)}")
+
+
 
 np.save('/media/ben2X/SeizureBot/data_vector.npy', data_vector)
 np.save('/media/ben2X/SeizureBot/label_vector.npy', label_vector)
